@@ -47,6 +47,7 @@ class fullyConnectedNN(object):
         self.deltas = [np.zeros((len(features), layer_size), dtype=float) for layer_size in self.layers_sizes[1:]]
         net_res = self.softmax(self.feed_forward(features, train=True))
         error_der = self.cross_entropy_derivative(net_res, labels)
+
         # compute the first delta
         self.deltas[-1] = (1 - np.tanh(self.layer_out[-1])**2) * error_der
 
@@ -73,7 +74,7 @@ class fullyConnectedNN(object):
 
     def train(self, features, labels, epochs=100, lr=0.01, batch_size=32):
         self.lr = lr
-        for epoch in range(epochs):
+        for epoch in tqdm(range(epochs)):
             # Shuffle the training data
             combined_data = list(zip(features, labels))
             random.shuffle(combined_data)
@@ -86,7 +87,7 @@ class fullyConnectedNN(object):
             ]
 
             # Iterate over mini-batches and update model parameters
-            for mini_batch_features, mini_batch_labels in tqdm(mini_batches):
+            for mini_batch_features, mini_batch_labels in mini_batches:
                 self.back_prop(mini_batch_features, mini_batch_labels)
                 self.update_weights()
 
