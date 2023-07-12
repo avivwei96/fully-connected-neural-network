@@ -6,7 +6,13 @@ class fullyConnectedNN(object):
     def __init__(self, layers_sizes, l1_reg=0, l2_reg=0, momentum=0, activation='sig', loss='CE', lr_change=1):
         """
         this function init the NN
-        :param layers_sizes(list): list of the sizes of the layers
+        :param layers_sizes: (np array like) the struct of the net
+        :param l1_reg: (float) the coefficient of the l1 reg
+        :param l2_reg: (float) the coefficient of the l2 reg
+        :param momentum: (float) the coefficient of the grad momentum
+        :param activation: (string) the name of the activation function
+        :param loss: (string) the name of the loss function
+        :param lr_change: (float) the coefficent of the changing lr if the net doesnt progress
         """
         self.layers_sizes = layers_sizes
         self.n_layers = len(layers_sizes)
@@ -72,7 +78,6 @@ class fullyConnectedNN(object):
         self.loss += np.mean(self.loss_func(net_res, labels))
         error_der = self.loss_grad(net_res, labels)
 
-
         # compute the first delta
         delta = self.grad(self.layer_in[-1]) * error_der
         self.gradients[-1] = self.layer_in[-2].T @ delta + self.gradients[-1] * self.momentum
@@ -80,27 +85,40 @@ class fullyConnectedNN(object):
         # implementing the back prop rule
         for layer_i in range(2, self.n_layers):
             sum_of_Del_W = self._weights[-layer_i + 1] @ delta.T
-            res = self.grad(self.layer_in[-layer_i])
-            delta = res * sum_of_Del_W.T
+            grad = self.grad(self.layer_in[-layer_i])
+            delta = grad * sum_of_Del_W.T
             self.gradients[-layer_i] = self.layer_in[-layer_i - 1].T @ delta + self.gradients[-layer_i] * self.momentum
 
     def update_weights(self):
+        # this function update the weight due to the gradient (SGD)
         for layer_i in range(0, self.n_layers - 1):
             self._weights[layer_i] -= self.lr * self.gradients[layer_i] + self.l2*self._weights[layer_i] + \
                                       self.l1*(self._weights[layer_i]/abs(self._weights[layer_i]))
 
     def predict_proba(self, features):
+        # this function return a proba vector with th net res
         return self.softmax(self.feed_forward(features))
 
     def predict(self, features):
+        # this function return the label prediction of the net
         proba_vec = self.predict_proba(features)
         return np.argmax(proba_vec, axis=1)
 
-    def train(self, features, labels, X_vladition, y_vladition, epochs=100, lr=0.01, batch_size=32):
+    def train(self, features, labels, X_vladition, y_vladition, epochs=100, lr=0.01, batch_size=128):
+        """
+
+        :param features: (np array) the vectors of the features of the train data
+        :param labels: (np array) one hot vector of the true label of the train data
+        :param X_vladition: (np array) the vectors of the features of the validation data
+        :param y_vladition:(np array) one hot vector of the true label of the validation data
+        :param epochs: (int) the number of max epochs
+        :param lr: (float) the learning rate for changing the weights
+        :param batch_size: (int) the size of the batch
+        """
         self.lr = lr
         counter = 0
         score = 0
-        for epoch in range(epochs):
+        for epoch in tqdm(range(epochs)):
             self.loss = 0
             # Shuffle the training data
             combined_data = list(zip(features, labels))
@@ -114,7 +132,7 @@ class fullyConnectedNN(object):
             ]
 
             # Iterate over mini-batches and update model parameters
-            for mini_batch_features, mini_batch_labels in tqdm(mini_batches):
+            for mini_batch_features, mini_batch_labels in mini_batches:
                 self.back_prop(mini_batch_features, mini_batch_labels)
                 self.update_weights()
             n_score = self.score(X_vladition, np.argmax(y_vladition, axis=1))
@@ -124,25 +142,24 @@ class fullyConnectedNN(object):
             else:
                 self.lr *= self.lr_change  # if the score doesnt increase the lr will change due to the lr_change
                 counter += 1
-            if counter > 5:
+            if counter > 10:
                 break
-            print(f"---------------------epoch:{epoch+1}/{epochs}-------------------------")
-            print(f"Score:{n_score} loss: {self.loss / len(mini_batches)} ")
-            print("---------------------------------------------------------------------")
 
     def score(self, features, labels):
+        # return the score of the net for those labels and features
         res = self.predict(features)
         correct_predictions = np.sum(labels == res)
         return correct_predictions / len(labels)
 
     def print_net(self):
-        print(f"lr = {self.lr} activtion function = {self.activation_func} loss = {self.loss_func_name}"
-              f"reg l1 = {self.l1} reg l2 = {self.l2} momentum = {self.momentum} lr chamge = {self.lr_change}")
+        # print the net details
+        print(f"| lr = {self.lr} | activtion function = {self.activation_func} | loss = {self.loss_func_name} | \n"
+              f"| reg l1 = {self.l1} | reg l2 = {self.l2} | momentum = {self.momentum} | lr chamge = {self.lr_change} |")
 
     # loss function and their grad
     @staticmethod
     def cross_entropy(pred_prob, true_label):
-        return -sum(np.log(pred_prob).T @ true_label)
+        return -sum(np.log(pred_prob).T @ true_label)/len(true_label)
 
     @staticmethod
     def cross_entropy_derivative(y_pred, y_true):
